@@ -215,21 +215,11 @@ class IdoGeikoGenerator:
             combo.append(TURN)
             used.add(TURN.name)
 
-        if is_kokutsu:
-            shuto_blocks = [b for b in self.all_blocks if "shuto" in b.tags]
-            if shuto_blocks:
-                combo.append(self.pick(shuto_blocks, used))
-            else:
-                combo.append(self.pick(self.all_blocks, used))
-        else:
-            non_shuto_blocks = [b for b in self.all_blocks if "shuto" not in b.tags]
-            combo.append(self.pick(non_shuto_blocks, used))
+        combo.append(self.pick(self.all_blocks, used))
 
         remaining = level - len(combo)
         if remaining <= 0:
             return combo
-
-        strikes_for_stance = SHUTO if is_kokutsu else [s for s in self.all_strikes if "shuto" not in s.tags]
 
         for i in range(remaining):
             is_last = (i == remaining - 1)
@@ -245,7 +235,7 @@ class IdoGeikoGenerator:
                 pool = PUNCHES_GYAKU if self.rng.random() < 0.6 else PUNCHES_OI
                 combo.append(self.pick(pool, used))
             elif choice == "strike":
-                combo.append(self.pick(strikes_for_stance, used))
+                combo.append(self.pick(self.all_strikes, used))
             elif choice == "kick":
                 combo.append(self.pick(self.kicks_modori, used))
             elif choice == "elbow":

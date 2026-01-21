@@ -26,6 +26,7 @@ BLOCKS_SINGLE = [
     Tech("morote chudan uke", ("block",)),
     Tech("juji uke", ("block",)),
     Tech("osae uke", ("block",)),
+    Tech("shuto no kamae", ("block", "shuto")),
 ]
 
 BLOCKS_DOUBLE_SIMULTANEOUS = [
@@ -214,26 +215,15 @@ class IdoGeikoGenerator:
             combo.append(TURN)
             used.add(TURN.name)
 
-        if step_number == 1:
-            if is_kokutsu:
-                combo.append(SHUTO_NO_KAMAE)
-                used.add(SHUTO_NO_KAMAE.name)
-            elif self.rng.random() < 0.9:
-                combo.append(GEDAN_BARAI)
-                used.add(GEDAN_BARAI.name)
+        if is_kokutsu:
+            shuto_blocks = [b for b in self.all_blocks if "shuto" in b.tags]
+            if shuto_blocks:
+                combo.append(self.pick(shuto_blocks, used))
             else:
-                non_shuto_blocks = [b for b in self.all_blocks if "shuto" not in b.tags]
-                combo.append(self.pick(non_shuto_blocks, used))
+                combo.append(self.pick(self.all_blocks, used))
         else:
-            if is_kokutsu:
-                shuto_blocks = [b for b in self.all_blocks if "shuto" in b.tags]
-                if shuto_blocks:
-                    combo.append(self.pick(shuto_blocks, used))
-                else:
-                    combo.append(self.pick(self.all_blocks, used))
-            else:
-                non_shuto_blocks = [b for b in self.all_blocks if "shuto" not in b.tags]
-                combo.append(self.pick(non_shuto_blocks, used))
+            non_shuto_blocks = [b for b in self.all_blocks if "shuto" not in b.tags]
+            combo.append(self.pick(non_shuto_blocks, used))
 
         remaining = level - len(combo)
         if remaining <= 0:
@@ -276,11 +266,18 @@ class IdoGeikoGenerator:
         stance = "kokutsu dachi" if is_kokutsu else "zenkutsu dachi"
         return Step(step_number, stance, combo)
 
-    def generate_cycle(self, level: int, is_kokutsu: bool = None) -> List[Step]:
+    def get_starting_position(self, is_kokutsu: bool) -> str:
+        stance = "kokutsu dachi" if is_kokutsu else "zenkutsu dachi"
+        technique = "shuto no kamae" if is_kokutsu else "gedan barai"
+        return f"{stance} {technique}"
+
+    def generate_cycle(self, level: int, is_kokutsu: bool = None) -> Tuple[str, List[Step]]:
         self.used_in_cycle.clear()
         if is_kokutsu is None:
             is_kokutsu = self.rng.random() < 0.3
-        return [self.build_step(n, level, is_kokutsu) for n in range(1, 5)]
+        starting_position = self.get_starting_position(is_kokutsu)
+        steps = [self.build_step(n, level, is_kokutsu) for n in range(1, 5)]
+        return starting_position, steps
 
 
 def format_step(step: Step) -> str:

@@ -26,7 +26,11 @@ if st.button("Generar"):
     st.caption(f"Seed: {seed}")
     st.divider()
 
-    base_cycle = generator.generate_cycle(level)
+    starting_position, base_cycle = generator.generate_cycle(level)
+
+    st.subheader("Posición inicial")
+    st.write(f"**{starting_position}**")
+    st.divider()
 
     for start in range(1, 5):
         st.subheader(f"Empezando desde paso {start}")

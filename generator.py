@@ -25,7 +25,6 @@ BLOCKS_SINGLE = [
     Tech("gyaku gedan barai", ("block", "gyaku")),
     Tech("morote chudan uke", ("block",)),
     Tech("juji uke", ("block",)),
-    Tech("mawashi uke", ("block",)),
     Tech("osae uke", ("block",)),
 ]
 
@@ -113,11 +112,10 @@ KICKS_BASE = [
     Tech("chusoku gedan mawashi geri", ("kick",)),
     Tech("haisoku uchi mawashi geri", ("kick",)),
     Tech("haisoku soto mawashi geri", ("kick",)),
-    Tech("sokuto chudan yoko keage", ("kick",)),
-    Tech("sokuto chudan yoko kekomi", ("kick",)),
+    Tech("sokuto chudan yoko geri keage", ("kick",)),
+    Tech("sokuto chudan yoko geri kekomi", ("kick",)),
     Tech("kakato chudan ushiro geri", ("kick",)),
     Tech("kakato jodan oroshi geri", ("kick",)),
-    Tech("haisoku mikazuki geri", ("kick",)),
     Tech("sokuto kansetsu geri", ("kick",)),
 ]
 
@@ -132,6 +130,8 @@ SANBON = [
 ]
 
 TURN = Tech("mawatte", ("turn",))
+GEDAN_BARAI = Tech("gedan barai", ("block",))
+SHUTO_NO_KAMAE = Tech("shuto no kamae", ("block", "shuto"))
 
 
 def make_modori(kick: Tech) -> Tech:
@@ -157,18 +157,21 @@ class IdoGeikoGenerator:
         self.all_punches = PUNCHES_OI + PUNCHES_GYAKU + PUNCHES_MOROTE
         self.all_strikes = URAKEN + SHUTO + TETTSUI
         self.kicks_modori = [make_modori(k) for k in KICKS_BASE]
+        self.knee_modori = [make_modori(k) for k in KNEE]
         
         self.nihon_candidates = (
-            [b for b in BLOCKS_SINGLE if "double" not in b.tags] +
-            PUNCHES_OI + PUNCHES_GYAKU +
-            URAKEN + SHUTO + TETTSUI + ELBOW +
-            self.kicks_modori + KNEE
+            [b for b in BLOCKS_SINGLE if "double" not in b.tags and "gyaku" not in b.tags] +
+            PUNCHES_OI +
+            [s for s in URAKEN if "gyaku" not in s.tags] +
+            [s for s in SHUTO if "gyaku" not in s.tags] +
+            [s for s in TETTSUI if "gyaku" not in s.tags] +
+            [e for e in ELBOW if "gyaku" not in e.tags]
         )
         
         self.nikai_candidates = (
             PUNCHES_OI + PUNCHES_GYAKU +
             URAKEN + SHUTO + TETTSUI + ELBOW +
-            self.kicks_modori + KNEE +
+            self.kicks_modori + self.knee_modori +
             [Tech("shuto no kamae", ("shuto",))]
         )
 
@@ -192,25 +195,18 @@ class IdoGeikoGenerator:
         return make_nikai(base)
 
     def build_ikio_do(self, used_step: Set[str]) -> Tech:
-        patterns = [
-            (self.all_blocks, PUNCHES_GYAKU),
-            (self.all_blocks, self.kicks_modori),
-            (PUNCHES_GYAKU, self.kicks_modori),
-            (PUNCHES_GYAKU, ELBOW),
-            (self.kicks_modori, PUNCHES_GYAKU),
-            (self.kicks_modori, self.kicks_modori),
-            (URAKEN, PUNCHES_GYAKU),
-            (URAKEN, self.kicks_modori),
-            (SHUTO, PUNCHES_GYAKU),
-            (ELBOW, KNEE),
-            (self.all_strikes, self.kicks_modori),
-        ]
-        pattern = self.rng.choice(patterns)
-        tech1 = self.pick(pattern[0], used_step)
-        tech2 = self.pick(pattern[1], used_step)
+        hand_pool = self.all_blocks + PUNCHES_GYAKU + self.all_strikes + ELBOW
+        foot_pool = self.kicks_modori + self.knee_modori
+        
+        if self.rng.random() < 0.7:
+            tech1 = self.pick(hand_pool, used_step)
+            tech2 = self.pick(hand_pool, used_step)
+        else:
+            tech1 = self.pick(foot_pool, used_step)
+            tech2 = self.pick(foot_pool, used_step)
         return make_ikio_do(tech1, tech2)
 
-    def build_combo(self, step_number: int, level: int) -> List[Tech]:
+    def build_combo(self, step_number: int, level: int, is_kokutsu: bool) -> List[Tech]:
         used: Set[str] = set()
         combo: List[Tech] = []
         
@@ -218,11 +214,32 @@ class IdoGeikoGenerator:
             combo.append(TURN)
             used.add(TURN.name)
 
-        combo.append(self.pick(self.all_blocks, used))
+        if step_number == 1:
+            if is_kokutsu:
+                combo.append(SHUTO_NO_KAMAE)
+                used.add(SHUTO_NO_KAMAE.name)
+            elif self.rng.random() < 0.9:
+                combo.append(GEDAN_BARAI)
+                used.add(GEDAN_BARAI.name)
+            else:
+                non_shuto_blocks = [b for b in self.all_blocks if "shuto" not in b.tags]
+                combo.append(self.pick(non_shuto_blocks, used))
+        else:
+            if is_kokutsu:
+                shuto_blocks = [b for b in self.all_blocks if "shuto" in b.tags]
+                if shuto_blocks:
+                    combo.append(self.pick(shuto_blocks, used))
+                else:
+                    combo.append(self.pick(self.all_blocks, used))
+            else:
+                non_shuto_blocks = [b for b in self.all_blocks if "shuto" not in b.tags]
+                combo.append(self.pick(non_shuto_blocks, used))
 
         remaining = level - len(combo)
         if remaining <= 0:
             return combo
+
+        strikes_for_stance = SHUTO if is_kokutsu else [s for s in self.all_strikes if "shuto" not in s.tags]
 
         for i in range(remaining):
             is_last = (i == remaining - 1)
@@ -238,13 +255,13 @@ class IdoGeikoGenerator:
                 pool = PUNCHES_GYAKU if self.rng.random() < 0.6 else PUNCHES_OI
                 combo.append(self.pick(pool, used))
             elif choice == "strike":
-                combo.append(self.pick(self.all_strikes, used))
+                combo.append(self.pick(strikes_for_stance, used))
             elif choice == "kick":
                 combo.append(self.pick(self.kicks_modori, used))
             elif choice == "elbow":
                 combo.append(self.pick(ELBOW, used))
             elif choice == "knee":
-                combo.append(self.pick(KNEE, used))
+                combo.append(self.pick(self.knee_modori, used))
             elif choice == "nihon":
                 combo.append(self.build_nihon(used))
             elif choice == "nikai":
@@ -254,18 +271,16 @@ class IdoGeikoGenerator:
 
         return combo
 
-    def determine_stance(self, combo: List[Tech]) -> str:
-        has_shuto = any("shuto" in t.tags for t in combo)
-        return "kokutsu dachi" if has_shuto else "zenkutsu dachi"
-
-    def build_step(self, step_number: int, level: int) -> Step:
-        combo = self.build_combo(step_number, level)
-        stance = self.determine_stance(combo)
+    def build_step(self, step_number: int, level: int, is_kokutsu: bool) -> Step:
+        combo = self.build_combo(step_number, level, is_kokutsu)
+        stance = "kokutsu dachi" if is_kokutsu else "zenkutsu dachi"
         return Step(step_number, stance, combo)
 
-    def generate_cycle(self, level: int) -> List[Step]:
+    def generate_cycle(self, level: int, is_kokutsu: bool = None) -> List[Step]:
         self.used_in_cycle.clear()
-        return [self.build_step(n, level) for n in range(1, 5)]
+        if is_kokutsu is None:
+            is_kokutsu = self.rng.random() < 0.3
+        return [self.build_step(n, level, is_kokutsu) for n in range(1, 5)]
 
 
 def format_step(step: Step) -> str:
